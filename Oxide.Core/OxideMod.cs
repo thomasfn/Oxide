@@ -18,6 +18,8 @@ using Timer = Oxide.Core.Libraries.Timer;
 
 namespace Oxide.Core
 {
+    public delegate void NativeDebugCallback(string message);
+
     /// <summary>
     /// Responsible for core Oxide logic
     /// </summary>
@@ -93,6 +95,13 @@ namespace Oxide.Core
 
         private Stopwatch timer;
 
+        private NativeDebugCallback debugCallback;
+
+        public OxideMod(NativeDebugCallback debugCallback)
+        {
+            this.debugCallback = debugCallback;
+        }
+
         /// <summary>
         /// Initializes a new instance of the OxideMod class
         /// </summary>
@@ -135,10 +144,15 @@ namespace Oxide.Core
             RegisterLibrarySearchPath(Path.Combine(ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86"));
 
             // Create the loggers
-            filelogger = new RotatingFileLogger();
-            filelogger.Directory = LogDirectory;
+            //throw new Exception("We got here 1!");
+            //filelogger = new RotatingFileLogger();
+            //filelogger.Directory = LogDirectory;
+            //throw new Exception("We got here 2!");
             RootLogger = new CompoundLogger();
-            RootLogger.AddLogger(filelogger);
+            if (debugCallback != null) RootLogger.AddLogger(new CallbackLogger(debugCallback));
+            //RootLogger.AddLogger(filelogger);
+
+            
 
             // Log Oxide core loading
             LogInfo("Loading Oxide core v{0}...", Version);
