@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Reflection;
 
 using Oxide.Core.Logging;
 using Oxide.Core.Plugins;
@@ -102,10 +103,37 @@ namespace Oxide.Core.Libraries.Covalence
         {
             // Search for all provider types
             Type baseType = typeof(ICovalenceProvider);
+            IEnumerable<Type> candidateSet = null;
+            foreach (var ass in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] assTypes = null;
+                try
+                {
+                    assTypes = ass.GetTypes();
+                }
+                catch (ReflectionTypeLoadException rtlEx)
+                {
+                    assTypes = rtlEx.Types;
+                }
+                catch (TypeLoadException tlEx)
+                {
+                    logger.Write(LogType.Warning, "Covalence: Type {0} could not be loaded from assembly '{1}': {2}", tlEx.TypeName, ass.FullName, tlEx);
+                }
+                if (assTypes != null)
+                {
+                    if (candidateSet == null)
+                        candidateSet = assTypes;
+                    else
+                        candidateSet = candidateSet.Concat(assTypes);
+                }
+            }
+            if (candidateSet == null)
+            {
+                logger.Write(LogType.Warning, "No Covalence providers found, Covalence will not be functional for this session.");
+                return;
+            }
             List<Type> candidates = new List<Type>(
-                AppDomain.CurrentDomain.GetAssemblies()
-                    .SelectMany((a) => a.GetTypes())
-                    .Where((t) => t.IsClass && !t.IsAbstract && t.FindInterfaces((m, o) => m == baseType, null).Length == 1)
+                candidateSet.Where((t) => t != null && t.IsClass && !t.IsAbstract && t.FindInterfaces((m, o) => m == baseType, null).Length == 1)
                 );
 
             // Select a candidate
