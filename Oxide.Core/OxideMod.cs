@@ -62,9 +62,6 @@ namespace Oxide.Core
         /// </summary>
         public bool IsShuttingDown { get; private set; }
 
-        // The rotating file logger
-        private RotatingFileLogger filelogger;
-
         // The extension manager
         private ExtensionManager extensionmanager;
 
@@ -92,6 +89,8 @@ namespace Oxide.Core
         private bool hasLoadedCorePlugins;
 
         public ServerConsole.ServerConsole ServerConsole;
+
+        private Stopwatch timer;
 
         private NativeDebugCallback debugCallback;
 
