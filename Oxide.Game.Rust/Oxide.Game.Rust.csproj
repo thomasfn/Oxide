@@ -53,10 +53,20 @@
     <Reference Include="Assembly-CSharp">
       <HintPath>Dependencies\Assembly-CSharp.dll</HintPath>
     </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>Dependencies\Assembly-CSharp-firstpass.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\Oxide.Core\Dependencies\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="UnityEngine">
       <HintPath>Dependencies\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>Dependencies\UnityEngine.UI.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -71,6 +81,7 @@
     <Compile Include="Libraries\Rust.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RustCore.cs" />
+    <Compile Include="RustCui.cs" />
     <Compile Include="RustExtension.cs" />
     <Compile Include="RustPlugin.cs" />
     <Compile Include="RustPluginLoader.cs" />
@@ -96,10 +107,12 @@
     <PropertyGroup>
       <GameName>Rust</GameName>
       <BundleDir>$(SolutionDir)\Bundles</BundleDir>
-      <ManagedDir>$(GameName)\RustDedicated_Data\Managed</ManagedDir>
+      <DataDir>$(GameName)\RustDedicated_Data</DataDir>
+      <ManagedDir>$(DataDir)\Managed</ManagedDir>
     </PropertyGroup>
     <ItemGroup>
-      <ManagedFiles Include="$(TargetDir)\*.dll" Exclude="$(TargetDir)\Assembly-CSharp.dll; $(TargetDir)\UnityEngine.dll" />
+      <GameFiles Include="$(ProjectDir)\Files\**\*.*" />
+      <ManagedFiles Include="$(TargetDir)\*.dll" Exclude="$(TargetDir)\Assembly-CSharp*.dll; $(TargetDir)\UnityEngine*.dll" />
       <ManagedFiles Include="$(SolutionDir)\Oxide.Core\$(OutputPath)\*.dll" />
       <ManagedFiles Include="$(SolutionDir)\Oxide.Core\Dependencies\*.dll" />
       <ManagedFiles Include="$(SolutionDir)\Oxide.Ext.CSharp\$(OutputPath)\*.dll" />
@@ -118,6 +131,7 @@
       <PatchedFiles Include="$(ProjectDir)\Patched\*.dll; $(ProjectDir)\Patched\*.exe" />
       <ConfigFiles Include="$(ProjectDir)\Patched\oxide.root.json" />
     </ItemGroup>
+    <Copy SourceFiles="@(GameFiles)" DestinationFiles="@(GameFiles->'$(BundleDir)\$(GameName)\%(RecursiveDir)%(Filename)%(Extension)')" />
     <Copy SourceFiles="@(ManagedFiles)" DestinationFiles="@(ManagedFiles->'$(BundleDir)\$(ManagedDir)\%(RecursiveDir)\%(Filename)%(Extension)')" ContinueOnError="false" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(NativeFiles)" DestinationFiles="@(NativeFiles->'$(BundleDir)\$(GameName)\%(Filename)%(Extension)')" ContinueOnError="false" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(PatchedFiles)" DestinationFiles="@(PatchedFiles->'$(BundleDir)\$(ManagedDir)\%(Filename)%(Extension)')" ContinueOnError="false" SkipUnchangedFiles="false" />

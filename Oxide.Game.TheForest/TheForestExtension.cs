@@ -29,16 +29,31 @@ namespace Oxide.Game.TheForest
         public override string Author => "Oxide Team";
 
         public override string[] WhitelistAssemblies => new[] { "Assembly-CSharp", "mscorlib", "Oxide.Core", "System", "System.Core", "UnityEngine" };
-        public override string[] WhitelistNamespaces => new[] { "Steamworks", "System.Collections", "TheForest", "UnityEngine" };
+        public override string[] WhitelistNamespaces => new[] { "Steamworks", "System.Collections", "System.Security.Cryptography", "System.Text", "TheForest", "UnityEngine" };
 
         private static readonly string[] Filter =
         {
+            "****** Game Activation Sequence ******",
+            "Body Variation",
+            "CanResume:",
+            "DestroyPickup:",
             "Game Activation Sequence step",
-            "planeCrash started",
             "Hull (UnityEngine.GameObject)",
-            "going black",
+            "LobbyCreated param.m_eResult=k_EResult",
+            "Refreshing Input Mapping Icons",
+            "Skin Variation",
+            "Skipped frame because",
+            "Skipped rendering frame because",
+            "WakeFromKnockOut",
+            "attach: [",
+            "delaying initial",
             "disableFlying",
-            "WakeFromKnockOut"
+            "going black",
+            "null texture passed to GUI.DrawTexture",
+            "planeCrash started",
+            "setFemale",
+            "setMale",
+            "started steam server"
         };
 
         /// <summary>
@@ -56,8 +71,6 @@ namespace Oxide.Game.TheForest
         /// </summary>
         public override void Load()
         {
-            IsGameExtension = true;
-
             // Register our loader
             Manager.RegisterPluginLoader(new TheForestPluginLoader());
 
@@ -82,7 +95,51 @@ namespace Oxide.Game.TheForest
             if (!Interface.Oxide.EnableConsole()) return;
             Application.logMessageReceived += HandleLog;
             Interface.Oxide.ServerConsole.Input += ServerConsoleOnInput;
-            // TODO: Add status information
+
+            Interface.Oxide.ServerConsole.Title = () =>
+            {
+                var players = CoopLobby.Instance?.MemberCount;
+                var hostname = CoopLobby.Instance?.Info?.Name.Split("()".ToCharArray())[0];
+                return string.Concat(players, " | ", hostname);
+            };
+
+            Interface.Oxide.ServerConsole.Status1Left = () =>
+            {
+                var hostname = CoopLobby.Instance?.Info.Name.Split("()".ToCharArray())[0];
+                return string.Concat(" ", hostname);
+            };
+            Interface.Oxide.ServerConsole.Status1Right = () =>
+            {
+                var fps = Mathf.RoundToInt(1f / Time.smoothDeltaTime);
+                var seconds = TimeSpan.FromSeconds(Time.realtimeSinceStartup);
+                var uptime = $"{seconds.TotalHours:00}h{seconds.Minutes:00}m{seconds.Seconds:00}s".TrimStart(' ', 'd', 'h', 'm', 's', '0');
+                return string.Concat(fps, "fps, ", uptime);
+            };
+
+            Interface.Oxide.ServerConsole.Status2Left = () =>
+            {
+                var players = CoopLobby.Instance?.MemberCount;
+                var playerLimit = CoopLobby.Instance?.Info?.MemberLimit;
+                return string.Concat(" ", players, "/", playerLimit, " players");
+            };
+            Interface.Oxide.ServerConsole.Status2Right = () =>
+            {
+                // TODO: Network in/out
+                return "";
+            };
+
+            Interface.Oxide.ServerConsole.Status3Left = () =>
+            {
+                //var gameTime = TheForestAtmosphere.Instance?.TimeOfDay; // TODO: Fix NRE and format
+                return string.Concat(" "/*, gameTime*/);
+            };
+            Interface.Oxide.ServerConsole.Status3Right = () =>
+            {
+                var gameVersion = "0.22"; // TODO: Grab version/protocol
+                var oxideVersion = OxideMod.Version.ToString();
+                return string.Concat("Oxide ", oxideVersion, " for ", gameVersion);
+            };
+            Interface.Oxide.ServerConsole.Status3RightColor = ConsoleColor.Yellow;
         }
 
         private static void ServerConsoleOnInput(string input)

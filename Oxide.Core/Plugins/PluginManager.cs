@@ -108,7 +108,7 @@ namespace Oxide.Core.Plugins
         /// <param name="plugin"></param>
         internal void SubscribeToHook(string hookname, Plugin plugin)
         {
-            if (!loadedplugins.ContainsKey(plugin.Name)) return;
+            if (!loadedplugins.ContainsKey(plugin.Name) || !plugin.IsCorePlugin && hookname.StartsWith("I")) return;
             IList<Plugin> sublist;
             if (!hooksubscriptions.TryGetValue(hookname, out sublist))
             {
@@ -136,6 +136,7 @@ namespace Oxide.Core.Plugins
             object[] values = new object[plugins.Count];
             int returncount = 0;
             object finalvalue = null;
+            Plugin finalplugin = null;
             for (int i = 0; i < plugins.Count; i++)
             {
                 // Call the hook
@@ -144,15 +145,15 @@ namespace Oxide.Core.Plugins
                 {
                     values[i] = value;
                     finalvalue = value;
+                    finalplugin = plugins[i];
                     returncount++;
                 }
             }
 
             // Is there a return value?
             if (returncount == 0) return null;
-            if (returncount == 1) return finalvalue;
 
-            if (finalvalue != null)
+            if (returncount > 1 && finalvalue != null)
             {
                 // Notify log of hook conflict
                 string[] conflicts = new string[returncount];
@@ -162,7 +163,11 @@ namespace Oxide.Core.Plugins
                     if (values[i] != null && values[i] != finalvalue)
                         conflicts[j++] = plugins[i].Name;
                 }
-                Logger.Write(LogType.Warning, "Calling hook {0} resulted in a conflict between the following plugins: {1}", hookname, string.Join(", ", conflicts));
+                if (j > 0)
+                {
+                    conflicts[j] = finalplugin.Name;
+                    Logger.Write(LogType.Warning, "Calling hook {0} resulted in a conflict between the following plugins: {1}", hookname, string.Join(", ", conflicts));
+                }
             }
             return finalvalue;
         }
@@ -184,7 +189,7 @@ namespace Oxide.Core.Plugins
             if (!lastDeprecatedWarningAt.TryGetValue(name, out last_warning_at) || now - last_warning_at > 300f)
             {
                 lastDeprecatedWarningAt[name] = now;
-                Interface.Oxide.LogWarning("{0} plugin is using deprecated hook: {1}", plugins[0].Name, name);
+                Interface.Oxide.LogWarning("'{0} v{1}' plugin is using deprecated hook: {2}", plugins[0].Name, plugins[0].Version, name);
             }
 
             return CallHook(name, args);

@@ -9,9 +9,7 @@ using Oxide.Core.Plugins;
 using Oxide.Game.RustLegacy.Libraries;
 
 using Rust.Defines;
-
 using uLink;
-
 using UnityEngine;
 
 namespace Oxide.Game.RustLegacy
@@ -64,16 +62,24 @@ namespace Oxide.Game.RustLegacy
         {
             // Add our commands
             cmdlib.AddConsoleCommand("oxide.plugins", this, "cmdPlugins");
+            cmdlib.AddConsoleCommand("global.plugins", this, "cmdPlugins");
             cmdlib.AddConsoleCommand("oxide.load", this, "cmdLoad");
+            cmdlib.AddConsoleCommand("global.load", this, "cmdLoad");
             cmdlib.AddConsoleCommand("oxide.unload", this, "cmdUnload");
+            cmdlib.AddConsoleCommand("global.unload", this, "cmdUnload");
             cmdlib.AddConsoleCommand("oxide.reload", this, "cmdReload");
+            cmdlib.AddConsoleCommand("global.reload", this, "cmdReload");
             cmdlib.AddConsoleCommand("oxide.version", this, "cmdVersion");
             cmdlib.AddConsoleCommand("global.version", this, "cmdVersion");
 
             cmdlib.AddConsoleCommand("oxide.group", this, "cmdGroup");
+            cmdlib.AddConsoleCommand("global.group", this, "cmdGroup");
             cmdlib.AddConsoleCommand("oxide.usergroup", this, "cmdUserGroup");
+            cmdlib.AddConsoleCommand("global.usergroup", this, "cmdUserGroup");
             cmdlib.AddConsoleCommand("oxide.grant", this, "cmdGrant");
+            cmdlib.AddConsoleCommand("global.grant", this, "cmdGrant");
             cmdlib.AddConsoleCommand("oxide.revoke", this, "cmdRevoke");
+            cmdlib.AddConsoleCommand("global.revoke", this, "cmdRevoke");
 
             // Setup the default permission groups
             if (permission.IsLoaded)
@@ -513,8 +519,8 @@ namespace Oxide.Game.RustLegacy
         /// </summary>
         /// <param name="oldtags"></param>
         /// <returns></returns>
-        [HookMethod("ModifyTags")]
-        private string ModifyTags(string oldtags)
+        [HookMethod("IModifyTags")]
+        private string IModifyTags(string oldtags)
         {
             // We're going to call out and build a list of all tags to use
             var taglist = new List<string>(oldtags.Split(','));
@@ -642,21 +648,28 @@ namespace Oxide.Game.RustLegacy
         }
 
         /// <summary>
-        /// Called when a user attempts to connect
+        /// Called when a user is attempting to connect
         /// </summary>
         /// <param name="connection"></param>
         /// <param name="approval"></param>
         /// <param name="acceptor"></param>
-        [HookMethod("OnUserApprove")]
-        private object OnUserApprove(ClientConnection connection, NetworkPlayerApproval approval, ConnectionAcceptor acceptor)
+        [HookMethod("IOnUserApprove")]
+        private object IOnUserApprove(ClientConnection connection, NetworkPlayerApproval approval, ConnectionAcceptor acceptor)
         {
+            // Reject invalid connections
+            if (connection.UserID == 0 || string.IsNullOrEmpty(connection.UserName))
+            {
+                approval.Deny(uLink.NetworkConnectionError.ConnectionBanned);
+                return false;
+            }
+
             var result = Interface.CallHook("CanClientLogin", connection, approval);
             if (result is uLink.NetworkConnectionError)
             {
                 approval.Deny((uLink.NetworkConnectionError)result);
                 return false;
             }
-            return null;
+            return Interface.CallHook("OnUserApprove", connection, approval, acceptor);
         }
 
         /// <summary>
@@ -679,8 +692,8 @@ namespace Oxide.Game.RustLegacy
         /// </summary>
         /// <param name="client"></param>
         /// <param name="total"></param>
-        [HookMethod("OnClientSpeak")]
-        private object OnClientSpeak(PlayerClient client, int total)
+        [HookMethod("IOnPlayerVoice")]
+        private object IOnPlayerVoice(PlayerClient client, int total)
         {
             var players = (List<uLink.NetworkPlayer>)playerList.GetValue(null);
             var num = Interface.CallHook("OnPlayerVoice", client.netUser, players);
@@ -693,8 +706,8 @@ namespace Oxide.Game.RustLegacy
         /// </summary>
         /// <param name="component"></param>
         /// <param name="item"></param>
-        [HookMethod("OnStructurePlaced")]
-        private object OnStructurePlaced(StructureComponent component, IStructureComponentItem item)
+        [HookMethod("IOnStructureBuilt")]
+        private object IOnStructureBuilt(StructureComponent component, IStructureComponentItem item)
         {
             return Interface.CallHook("OnStructureBuilt", component, item.controllable.netUser);
         }
@@ -704,8 +717,8 @@ namespace Oxide.Game.RustLegacy
         /// </summary>
         /// <param name="component"></param>
         /// <param name="item"></param>
-        [HookMethod("OnItemDeployedByPlayer")]
-        private object OnItemDeployedByPlayer(DeployableObject component, IDeployableItem item)
+        [HookMethod("IOnItemDeployed")]
+        private object IOnItemDeployed(DeployableObject component, IDeployableItem item)
         {
             return Interface.CallHook("OnItemDeployed", component, item.controllable.netUser);
         }
@@ -715,8 +728,8 @@ namespace Oxide.Game.RustLegacy
         /// </summary>
         /// <param name="takedamage"></param>
         /// <param name="damage"></param>
-        [HookMethod("OnProcessDamageEvent")]
-        private object OnProcessDamageEvent(TakeDamage takedamage, DamageEvent damage)
+        [HookMethod("IOnProcessDamageEvent")]
+        private object IOnProcessDamageEvent(TakeDamage takedamage, DamageEvent damage)
         {
             var dmg = Interface.CallHook("ModifyDamage", takedamage, damage);
             if (dmg is DamageEvent)
@@ -739,37 +752,13 @@ namespace Oxide.Game.RustLegacy
         }
 
         /// <summary>
-        /// Called when the GetClientMove packed is received for a player
-        /// Checking the player position in the packet to prevent harmful packets crashing the server
-        /// </summary>
-        /// <param name="controller"></param>
-        /// <param name="origin"></param>
-        /// <param name="encoded"></param>
-        /// <param name="stateFlags"></param>
-        /// <param name="info"></param>
-        [HookMethod("OnGetClientMove")]
-        private object OnGetClientMove(HumanController controller, Vector3 origin, int encoded, ushort stateFlags, uLink.NetworkMessageInfo info)
-        {
-            if (float.IsNaN(origin.x) || float.IsInfinity(origin.x) ||
-                float.IsNaN(origin.y) || float.IsInfinity(origin.y) ||
-                float.IsNaN(origin.z) || float.IsInfinity(origin.z))
-            {
-                Interface.Oxide.LogInfo($"Kicked {controller.netUser.displayName} [{controller.netUser.userID}] for sending bad packets for GetClientMove.");
-                controller.netUser.Kick(NetError.Facepunch_Kick_Violation, true);
-                return false;
-            }
-
-            return null;
-        }
-
-        /// <summary>
         /// Called when an AI moves
         /// Checking the NavMeshPathStatus, if the path is invalid the AI is killed to stop NavMesh errors
         /// </summary>
         /// <param name="ai"></param>
         /// <param name="movement"></param>
-        [HookMethod("OnAIMovement")]
-        private void OnAIMovement(BasicWildLifeAI ai, BaseAIMovement movement)
+        [HookMethod("IOnAIMovement")]
+        private void IOnAIMovement(BasicWildLifeAI ai, BaseAIMovement movement)
         {
             var nmMovement = movement as NavMeshMovement;
             if (!nmMovement)
@@ -785,6 +774,31 @@ namespace Oxide.Game.RustLegacy
         }
 
         /// <summary>
+        /// Called when the GetClientMove packed is received for a player
+        /// Checking the player position in the packet to prevent harmful packets crashing the server
+        /// </summary>
+        /// <param name="controller"></param>
+        /// <param name="origin"></param>
+        /// <param name="encoded"></param>
+        /// <param name="stateFlags"></param>
+        /// <param name="info"></param>
+        [HookMethod("IOnGetClientMove")]
+        private object IOnGetClientMove(HumanController controller, Vector3 origin, int encoded, ushort stateFlags, uLink.NetworkMessageInfo info)
+        {
+            if (float.IsNaN(origin.x) || float.IsInfinity(origin.x) ||
+                float.IsNaN(origin.y) || float.IsInfinity(origin.y) ||
+                float.IsNaN(origin.z) || float.IsInfinity(origin.z))
+            {
+                Interface.Oxide.LogInfo($"Banned {controller.netUser.displayName} [{controller.netUser.userID}] for sending bad packets (possible teleport hack)");
+                BanList.Add(controller.netUser.userID, controller.netUser.displayName, "Sending bad packets (possible teleport hack)");
+                controller.netUser.Kick(NetError.ConnectionBanned, true);
+                return false;
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Called when receiving an RPC message from a client attempting to run RecieveNetwork on the server
         /// This shouldn't run from the server ever and is only used by metabolism hacks
         /// </summary>
@@ -795,8 +809,8 @@ namespace Oxide.Game.RustLegacy
         /// <param name="antiradiation"></param>
         /// <param name="temperature"></param>
         /// <param name="poison"></param>
-        [HookMethod("OnRecieveNetwork")]
-        private object OnRecieveNetwork(Metabolism metabolism, float calories, float water, float radiation, float antiradiation, float temperature, float poison)
+        [HookMethod("IOnRecieveNetwork")]
+        private object IOnRecieveNetwork(Metabolism metabolism, float calories, float water, float radiation, float antiradiation, float temperature, float poison)
         {
             var now = Interface.Oxide.Now;
             if (now - lastWarningAt > 300f)

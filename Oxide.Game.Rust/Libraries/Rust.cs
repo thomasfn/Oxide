@@ -75,7 +75,7 @@ namespace Oxide.Game.Rust.Libraries
         {
             if (message != null)
             {
-                ConsoleSystem.Broadcast("chat.add", userid, $"<color=orange>{name}:</color> {message}", 1.0);
+                ConsoleSystem.Broadcast("chat.add", userid, $"<color=orange>{name}</color>: {message}", 1.0);
             }
             else
             {
@@ -94,9 +94,10 @@ namespace Oxide.Game.Rust.Libraries
         [LibraryFunction("SendChatMessage")]
         public void SendChatMessage(BasePlayer player, string name, string message = null, string userid = "0")
         {
+            if (player?.net == null) return;
             if (message != null)
             {
-                player.SendConsoleCommand("chat.add", userid, $"<color=orange>{name}:</color> {message}", 1.0);
+                player.SendConsoleCommand("chat.add", userid, $"<color=orange>{name}</color>: {message}", 1.0);
             }
             else
             {

@@ -1,6 +1,6 @@
 {
   "Name": "Reign of Kings",
-  "TargetDirectory": "D:\\Servers\\Game\\ReignOfKings\\Latest\\ROK_Data\\Managed",
+  "TargetDirectory": "D:\\Servers\\Game\\ReignOfKings\\ROK_Data\\Managed",
   "Manifests": [
     {
       "AssemblyName": "Assembly-CSharp",
@@ -8,7 +8,7 @@
         {
           "Type": "InitOxide",
           "Hook": {
-            "InjectionIndex": 100,
+            "InjectionIndex": 94,
             "HookTypeName": "Initialize Oxide",
             "Name": "InitOxide [internal]",
             "HookName": "InitOxide",
@@ -21,14 +21,14 @@
               "ReturnType": "System.Void",
               "Parameters": []
             },
-            "MSILHash": "MP7GNlkL3unJraJliFmYmJmaMfhzOFsE5/YFNdZ/+s8=",
+            "MSILHash": "AxjsuSVojx3Jn1WsX+qaiqS3xxd8YgcGzX55AYVl6f0=",
             "BaseHookName": null
           }
         },
         {
           "Type": "Simple",
           "Hook": {
-            "InjectionIndex": 23,
+            "InjectionIndex": 20,
             "ReturnBehavior": 0,
             "ArgumentBehavior": 0,
             "ArgumentString": null,
@@ -44,14 +44,14 @@
               "ReturnType": "System.Void",
               "Parameters": []
             },
-            "MSILHash": "9J/+PTF39lWgMC7QK6bk2cWD0ATMujAqy0BNkPQwfBU=",
+            "MSILHash": "zfRR3x+iY0gJPnVeXpDr1xYdwZChq9C54gbSECpKvzs=",
             "BaseHookName": null
           }
         },
         {
           "Type": "Simple",
           "Hook": {
-            "InjectionIndex": 52,
+            "InjectionIndex": 22,
             "ReturnBehavior": 0,
             "ArgumentBehavior": 0,
             "ArgumentString": null,
@@ -67,7 +67,7 @@
               "ReturnType": "System.Void",
               "Parameters": []
             },
-            "MSILHash": "d4c+TlbU36+/brCeX7QTWT5zXNrlnsu5BXl4BwGchug=",
+            "MSILHash": "csqNLjf2VcMkY7gXEKGQH12Q9iBLPSWWUgs+qd/fP8o=",
             "BaseHookName": null
           }
         },
@@ -90,7 +90,7 @@
               "ReturnType": "System.Boolean",
               "Parameters": []
             },
-            "MSILHash": "S6S8qp2UNB0zeXPEbiw5dnQKLWpUiT+/yBCcdr5eOZk=",
+            "MSILHash": "ZNlLPndguQ5BzMIx+Qy4U2jB326LJL+xRL7mH0s9qbo=",
             "BaseHookName": null
           }
         },
@@ -113,14 +113,14 @@
               "ReturnType": "System.Void",
               "Parameters": []
             },
-            "MSILHash": "uNh1HYbmxLpFAeMPvtb68CiaaTwGkzsvBvuXh5EErT8=",
+            "MSILHash": "1rqe1j+IMhv6R9DhlAUzK5pBF+pFZc7ChM1Pbd8RqGA=",
             "BaseHookName": null
           }
         },
         {
           "Type": "Simple",
           "Hook": {
-            "InjectionIndex": 22,
+            "InjectionIndex": 13,
             "ReturnBehavior": 0,
             "ArgumentBehavior": 2,
             "ArgumentString": null,
@@ -138,14 +138,14 @@
                 "CodeHatch.Engine.Networking.Player"
               ]
             },
-            "MSILHash": "rs2/N1BHlKJQbdF8Rs1EgME2XUhUdfN7czTi/jLJE54=",
+            "MSILHash": "V/FCeox4VZrSSROQnVZC+pu1RiCZUx1WAlZATmoz09Q=",
             "BaseHookName": null
           }
         },
         {
           "Type": "Simple",
           "Hook": {
-            "InjectionIndex": 160,
+            "InjectionIndex": 111,
             "ReturnBehavior": 1,
             "ArgumentBehavior": 4,
             "ArgumentString": "l0",
@@ -163,20 +163,20 @@
                 "CodeHatch.Engine.Networking.ConnectionRequest"
               ]
             },
-            "MSILHash": "Pyf9ztG8zl1L7fpCOXiUqAprGxe0dBMD8RCpVUaJ6pM=",
+            "MSILHash": "894KQHzYw4DeQPg/OIhcLnXRG9I/vSfLCvOXUI4KWKo=",
             "BaseHookName": null
           }
         },
         {
           "Type": "Simple",
           "Hook": {
-            "InjectionIndex": 174,
+            "InjectionIndex": 66,
             "ReturnBehavior": 0,
             "ArgumentBehavior": 4,
             "ArgumentString": "l5",
             "HookTypeName": "Simple",
-            "Name": "OnPlayerConnected",
-            "HookName": "OnPlayerConnected",
+            "Name": "IOnPlayerConnected [internal]",
+            "HookName": "IOnPlayerConnected",
             "AssemblyName": "Assembly-CSharp.dll",
             "TypeName": "CodeHatch.Engine.Networking.CoreServer",
             "Flagged": false,
@@ -188,7 +188,7 @@
                 "CodeHatch.Engine.Networking.Connection"
               ]
             },
-            "MSILHash": "zICQWC+8BRNuVwkZRVwY/+7B8z9q+iSW6NmhNmCTTwo=",
+            "MSILHash": "HC2A91sHTvdaxxnSqVGaPP4nal1mAaf4wjIWDSenLj8=",
             "BaseHookName": null
           }
         },
@@ -200,8 +200,8 @@
             "ArgumentBehavior": 2,
             "ArgumentString": null,
             "HookTypeName": "Simple",
-            "Name": "OnPlayerChat",
-            "HookName": "OnPlayerChat",
+            "Name": "IOnPlayerChat [internal]",
+            "HookName": "IOnPlayerChat",
             "AssemblyName": "Assembly-CSharp.dll",
             "TypeName": "CodeHatch.Networking.Events.Listeners.PlayerListener",
             "Flagged": false,
@@ -213,7 +213,7 @@
                 "CodeHatch.Networking.Events.Players.PlayerMessageEvent"
               ]
             },
-            "MSILHash": "sdQ7PlBJ19ldRfAvqM4jbtd0B7JhuI3ixCta4Cee03s=",
+            "MSILHash": "xygU0PB3VUu2OPUuZThQbJSJlaB6FgX/f0DZYDtx9/g=",
             "BaseHookName": null
           }
         },
@@ -238,7 +238,7 @@
                 "CodeHatch.Networking.Events.Entities.EntityDamageEvent"
               ]
             },
-            "MSILHash": "ua6liC0Z8CwcNDTpeEE+HUyFl/oSgHi3ikUopletwRk=",
+            "MSILHash": "K1VxUjH+AxzhzF4mVzayWMVF14XjHORI6BQC/QsRaiE=",
             "BaseHookName": null
           }
         },
@@ -295,7 +295,7 @@
         {
           "Type": "Simple",
           "Hook": {
-            "InjectionIndex": 170,
+            "InjectionIndex": 166,
             "ReturnBehavior": 0,
             "ArgumentBehavior": 2,
             "ArgumentString": null,
@@ -313,7 +313,7 @@
                 "CodeHatch.Networking.Events.Players.PlayerFirstSpawnEvent"
               ]
             },
-            "MSILHash": "lqfZoS44kAbmukMYBzeVZXmleqkBkxaS3KioF1wGz9I=",
+            "MSILHash": "JPHN+CJ6si47eFI2dG8GkmTSiHMfRKaZLY9FGMminwI=",
             "BaseHookName": null
           }
         },
@@ -338,7 +338,7 @@
                 "CodeHatch.Blocks.Networking.Events.CubePlaceEvent"
               ]
             },
-            "MSILHash": "tqZ2yzMqAMuuB/4IKalrhg3gU0CCIWEsokVJaNw9xT4=",
+            "MSILHash": "o6qPwPaEvw0Bw5Y5El4xUevixKiTYEP6VaRsmEXA7Qs=",
             "BaseHookName": null
           }
         },
@@ -389,35 +389,6 @@
               ]
             },
             "MSILHash": "dsUElMXBJ6DWumxh/47KppvzZczkzLMyA2CN5zS7BPc=",
-            "BaseHookName": null
-          }
-        },
-        {
-          "Type": "Simple",
-          "Hook": {
-            "InjectionIndex": 0,
-            "ReturnBehavior": 0,
-            "ArgumentBehavior": 2,
-            "ArgumentString": null,
-            "HookTypeName": "Simple",
-            "Name": "OnLog [internal]",
-            "HookName": "OnLog",
-            "AssemblyName": "Assembly-CSharp.dll",
-            "TypeName": "Logger",
-            "Flagged": true,
-            "Signature": {
-              "Exposure": 3,
-              "Name": "Log",
-              "ReturnType": "System.Void",
-              "Parameters": [
-                "Logger/LogType",
-                "System.Type",
-                "System.Object",
-                "System.Object[]",
-                "System.Object"
-              ]
-            },
-            "MSILHash": "SG7SgLG4XoDiSxOiKp7a4Q+O7i/mEIDiSUwGq1NLP2M=",
             "BaseHookName": null
           }
         },
@@ -524,7 +495,7 @@
         {
           "Type": "Simple",
           "Hook": {
-            "InjectionIndex": 13,
+            "InjectionIndex": 0,
             "ReturnBehavior": 1,
             "ArgumentBehavior": 2,
             "ArgumentString": "",

@@ -63,7 +63,7 @@ namespace Oxide.Core.Libraries
             /// <summary>
             /// Gets the plugin to which this web request belongs, if any
             /// </summary>
-            public Plugin Owner { get; }
+            public Plugin Owner { get; protected set; }
 
             /// <summary>
             /// Gets the web request headers
@@ -71,6 +71,8 @@ namespace Oxide.Core.Libraries
             public Dictionary<string, string> RequestHeaders { get; set; }
 
             private HttpWebRequest request = null;
+            private WaitHandle waitHandle = null;
+            private RegisteredWaitHandle registeredWaitHandle = null;
 
             /// <summary>
             /// Initializes a new instance of the WebRequest class
@@ -104,8 +106,6 @@ namespace Oxide.Core.Libraries
                     request.ServicePoint.Expect100Continue = ServicePointManager.Expect100Continue;
                     request.ServicePoint.ConnectionLimit = ServicePointManager.DefaultConnectionLimit;
 
-                    if (RequestHeaders != null) request.SetRawHeaders(RequestHeaders);
-
                     // Optional request body for post requests
                     var data = new byte[0];
                     if (Body != null)
@@ -114,6 +114,8 @@ namespace Oxide.Core.Libraries
                         request.ContentLength = data.Length;
                         request.ContentType = "application/x-www-form-urlencoded";
                     }
+
+                    if (RequestHeaders != null) request.SetRawHeaders(RequestHeaders);
 
                     // Perform DNS lookup and connect (blocking)
                     if (data.Length > 0)
@@ -145,7 +147,9 @@ namespace Oxide.Core.Libraries
                 catch (Exception ex)
                 {
                     ResponseText = ex.Message.Trim('\r', '\n', ' ');
-                    Interface.Oxide.LogException(string.Format("Web request produced exception (Url: {0})", URL), ex);
+                    var message = $"Web request produced exception (Url: {URL})";
+                    if (Owner) message += $" in '{Owner.Name} v{Owner.Version}' plugin";
+                    Interface.Oxide.LogException(message, ex);
                     if (request != null) request.Abort();
                     OnComplete();
                 }
@@ -168,29 +172,48 @@ namespace Oxide.Core.Libraries
                     {
                         ResponseText = ex.Message.Trim('\r', '\n', ' ');
                         var response = ex.Response as HttpWebResponse;
-                        if (response != null) ResponseCode = (int)response.StatusCode;
+                        if (response != null)
+                        {
+                            try
+                            {
+                                using (var stream = response.GetResponseStream())
+                                    using (var reader = new StreamReader(stream))
+                                        ResponseText = reader.ReadToEnd();
+                            }
+                            catch (Exception)
+                            {}
+                            ResponseCode = (int)response.StatusCode;
+                        }
                     }
                     catch (Exception ex)
                     {
                         ResponseText = ex.Message.Trim('\r', '\n', ' ');
-                        Interface.Oxide.LogException(string.Format("Web request produced exception (Url: {0})", URL), ex);
+                        var message = $"Web request produced exception (Url: {URL})";
+                        if (Owner) message += $" in '{Owner.Name} v{Owner.Version}' plugin";
+                        Interface.Oxide.LogException(message, ex);
                     }
                     if (request == null) return;
                     request.Abort();
                     OnComplete();
                 }, null);
-                ThreadPool.RegisterWaitForSingleObject(result.AsyncWaitHandle, OnTimeout, null, request.Timeout, true);
+                waitHandle = result.AsyncWaitHandle;
+                registeredWaitHandle = ThreadPool.RegisterWaitForSingleObject(waitHandle, OnTimeout, null, request.Timeout, true);
             }
 
             private void OnTimeout(object state, bool timed_out)
             {
                 if (timed_out && request != null) request.Abort();
-                if (Owner != null) Owner.OnRemovedFromManager -= owner_OnRemovedFromManager;
+                if (Owner != null)
+                {
+                    Owner.OnRemovedFromManager -= owner_OnRemovedFromManager;
+                    Owner = null;
+                }
             }
 
             private void OnComplete()
             {
                 if (Owner != null) Owner.OnRemovedFromManager -= owner_OnRemovedFromManager;
+                if (registeredWaitHandle != null) registeredWaitHandle.Unregister(waitHandle);
                 Interface.Oxide.NextTick(() =>
                 {
                     if (request == null) return;
@@ -201,8 +224,11 @@ namespace Oxide.Core.Libraries
                     }
                     catch (Exception ex)
                     {
-                        Interface.Oxide.LogException("Exception raised in web request callback", ex);
+                        var message = "Web request callback raised an exception";
+                        if (Owner) message += $" in '{Owner.Name} v{Owner.Version}' plugin";
+                        Interface.Oxide.LogException(message, ex);
                     }
+                    Owner = null;
                 });
             }
 
@@ -269,11 +295,6 @@ namespace Oxide.Core.Libraries
             {
                 while (!shutdown)
                 {
-                    if (queue.Count < 1)
-                    {
-                        workevent.Reset();
-                        workevent.WaitOne();
-                    }
                     int workerThreads, completionPortThreads;
                     ThreadPool.GetAvailableThreads(out workerThreads, out completionPortThreads);
                     if (workerThreads <= maxWorkerThreads || completionPortThreads <= maxCompletionPortThreads)
@@ -285,7 +306,10 @@ namespace Oxide.Core.Libraries
                     lock (syncroot)
                         if (queue.Count > 0)
                             request = queue.Dequeue();
-                    if (request != null) request.Start();
+                    if (request != null)
+                        request.Start();
+                    else
+                        workevent.WaitOne();
                 }
             }
             catch (Exception ex)

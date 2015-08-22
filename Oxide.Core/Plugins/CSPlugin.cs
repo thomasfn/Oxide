@@ -82,8 +82,16 @@ namespace Oxide.Core.Plugins
             foreach (string hookname in hooks.Keys)
                 Subscribe(hookname);
 
-            // Let the plugin know that it's loading
-            CallHook("Init", null);
+            try
+            {
+                // Let the plugin know that it's loading
+                OnCallHook("Init", new object[0]);
+            }
+            catch (Exception ex)
+            {
+                Interface.Oxide.LogException($"Failed to initialize plugin '{Name} v{Version}'", ex);
+                if (Loader != null) Loader.PluginErrors[Name] = ex.Message;
+            }
         }
 
         protected void AddHookMethod(string name, MethodInfo method)
@@ -103,7 +111,7 @@ namespace Oxide.Core.Plugins
         /// <param name="name"></param>
         /// <param name="args"></param>
         /// <returns></returns>
-        protected override object OnCallHook(string name, object[] args)
+        protected sealed override object OnCallHook(string name, object[] args)
         {
             List<MethodInfo> methods;
             if (!hooks.TryGetValue(name, out methods)) return null;
@@ -143,8 +151,7 @@ namespace Oxide.Core.Plugins
                 try
                 {
                     // Call method with the correct number of arguments
-                    var value = method.Invoke(this, hook_args);
-                    if (value != null) return_value = value;
+                    return_value = method.Invoke(this, hook_args);
                 }
                 catch (TargetInvocationException ex)
                 {

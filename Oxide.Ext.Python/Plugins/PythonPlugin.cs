@@ -6,12 +6,12 @@ using System.Linq.Expressions;
 using System.Reflection;
 
 using IronPython.Runtime;
+using IronPython.Runtime.Exceptions;
 
 using Microsoft.Scripting;
 using Microsoft.Scripting.Hosting;
 
 using Oxide.Core;
-using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using Oxide.Core.Plugins.Watchers;
 
@@ -42,7 +42,7 @@ namespace Oxide.Ext.Python.Plugins
         /// </summary>
         public override object Object => Class;
 
-        private IList<string> Globals;
+        private Dictionary<string, object> Globals;
 
         // The plugin change watcher
         private readonly FSWatcher watcher;
@@ -136,12 +136,14 @@ namespace Oxide.Ext.Python.Plugins
             // Set attributes
             PythonEngine.Operations.SetMember(Class, "Plugin", this);
 
-            Globals = PythonEngine.Operations.GetMemberNames(Class);
-
-            foreach (var name in Globals)
+            Globals = new Dictionary<string, object>();
+            var globals = PythonEngine.Operations.GetMemberNames(Class);
+            foreach (var name in globals)
             {
                 object func;
-                if (!PythonEngine.Operations.TryGetMember(Class, name, out func) || !PythonEngine.Operations.IsCallable(func) || !PythonEngine.Operations.ContainsMember(func, "__dict__")) continue;
+                if (!PythonEngine.Operations.TryGetMember(Class, name, out func) || !PythonEngine.Operations.IsCallable(func)) continue;
+                Globals.Add(name, func);
+                if (!PythonEngine.Operations.ContainsMember(func, "__dict__")) continue;
                 var dict = PythonEngine.Operations.GetMember<PythonDictionary>(func, "__dict__");
                 if (dict.ContainsKey("isCommand"))
                 {
@@ -152,9 +154,10 @@ namespace Oxide.Ext.Python.Plugins
                         Interface.Oxide.LogWarning("Command is missing name: {0} from plugin: {1}! Skipping...", name, Name);
                         continue;
                     }
+                    var funcToCall = func;
                     AddCovalenceCommand(names, perms, (cmd, type, caller, args) =>
                     {
-                        PythonEngine.Operations.InvokeMember(Class, name, caller, args);
+                        PythonEngine.Operations.Invoke(funcToCall, caller, args);
                         return true;
                     });
                 }
@@ -207,14 +210,14 @@ namespace Oxide.Ext.Python.Plugins
             base.HandleAddedToManager(manager);
 
             // Subscribe all our hooks
-            foreach (string key in Globals)
+            foreach (string key in Globals.Keys)
                 Subscribe(key);
 
             // Add us to the watcher
             watcher.AddMapping(Name);
 
             // Let the plugin know that it's loading
-            CallFunction("Init", null);
+            OnCallHook("Init", null);
         }
 
         /// <summary>
@@ -224,7 +227,7 @@ namespace Oxide.Ext.Python.Plugins
         public override void HandleRemovedFromManager(PluginManager manager)
         {
             // Let plugin know that it's unloading
-            CallFunction("Unload", null);
+            OnCallHook("Unload", null);
 
             // Remove us from the watcher
             watcher.RemoveMapping(Name);
@@ -241,21 +244,17 @@ namespace Oxide.Ext.Python.Plugins
         /// <returns></returns>
         protected override object OnCallHook(string hookname, object[] args)
         {
-            // Call it
-            return CallFunction(hookname, args);
-        }
-
-        /// <summary>
-        /// Calls a Python function by the given name and returns the output
-        /// </summary>
-        /// <param name="name"></param>
-        /// <param name="args"></param>
-        /// <returns></returns>
-        private object CallFunction(string name, object[] args)
-        {
             object func;
-            if (!Globals.Contains(name) || !PythonEngine.Operations.TryGetMember(Class, name, out func) || !PythonEngine.Operations.IsCallable(func)) return null;
-            return PythonEngine.Operations.InvokeMember(Class, name, args ?? new object[]{});
+            if (!Globals.TryGetValue(hookname, out func)) return null;
+            try
+            {
+                return PythonEngine.Operations.Invoke(func, args ?? new object[]{});
+            }
+            catch (Exception e)
+            {
+                var message = string.Format("Failed to call {0} ({1}: {2}){3}{4}", hookname, e.GetType().Name, e.Message, Environment.NewLine, e.StackTrace);
+                throw new RuntimeException(message, e);
+            }
         }
     }
 }

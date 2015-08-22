@@ -10,6 +10,13 @@ using Oxide.Core.Plugins.Watchers;
 
 namespace Oxide.Plugins
 {
+    public class PluginLoadFailure : Exception
+    {
+        public PluginLoadFailure(string reason) : base()
+        {
+        }
+    }
+
     /// <summary>
     /// Allows configuration of plugin info using an attribute above the plugin class
     /// </summary>
@@ -143,6 +150,12 @@ namespace Oxide.Plugins
                 this.GenericArguments = FieldType.GetGenericArguments();
             }
 
+            public bool HasValidConstructor(params Type[] argument_types)
+            {
+                var type = GenericArguments[1];
+                return type.GetConstructor(new Type[0]) != null || type.GetConstructor(argument_types) != null;
+            }
+
             public object Value => Field.GetValue(Plugin);
 
             public bool LookupMethod(string method_name, params Type[] argument_types)
@@ -238,13 +251,24 @@ namespace Oxide.Plugins
             foreach (var name in pluginReferenceFields.Keys)
                 pluginReferenceFields[name].SetValue(this, manager.GetPlugin(name));
 
-            CallHook("Loaded", null);
+            try
+            {
+                OnCallHook("Loaded", new object[0]);
+            }
+            catch (Exception ex)
+            {
+                Interface.Oxide.LogException($"Failed to initialize plugin '{Name} v{Version}'", ex);
+                Loader.PluginErrors[Name] = ex.Message;
+            }
         }
 
         public override void HandleRemovedFromManager(PluginManager manager)
         {
-            CallHook("Unloaded", null);
-            CallHook("Unload", null);
+            if (IsLoaded)
+            {
+                CallHook("Unloaded", null);
+                CallHook("Unload", null);
+            }
 
             Watcher.RemoveMapping(Name);
 
@@ -252,6 +276,15 @@ namespace Oxide.Plugins
                 pluginReferenceFields[name].SetValue(this, null);
 
             base.HandleRemovedFromManager(manager);
+        }
+
+        /// <summary>
+        /// Called from Init/Loaded callback to set a failure reason and unload the plugin
+        /// </summary>
+        /// <param name="reason"></param>
+        public void SetFailState(string reason)
+        {
+            throw new PluginLoadFailure(reason);
         }
 
         [HookMethod("OnPluginLoaded")]
@@ -277,7 +310,7 @@ namespace Oxide.Plugins
         /// <param name="args"></param>
         protected void Puts(string format, params object[] args)
         {
-            Interface.Oxide.LogInfo($"[{Title}] {format}", args);
+            Interface.Oxide.LogInfo("[{0}] {1}", Title, args.Length > 0 ? string.Format(format, args) : format);
         }
 
         /// <summary>
@@ -287,7 +320,7 @@ namespace Oxide.Plugins
         /// <param name="args"></param>
         protected void PrintWarning(string format, params object[] args)
         {
-            Interface.Oxide.LogWarning($"[{Title}] {format}", args);
+            Interface.Oxide.LogWarning("[{0}] {1}", Title, args.Length > 0 ? string.Format(format, args) : format);
         }
 
         /// <summary>
@@ -297,7 +330,7 @@ namespace Oxide.Plugins
         /// <param name="args"></param>
         protected void PrintError(string format, params object[] args)
         {
-            Interface.Oxide.LogError($"[{Title}] {format}", args);
+            Interface.Oxide.LogError("[{0}] {1}", Title, args.Length > 0 ? string.Format(format, args) : format);
         }
 
         /// <summary>
@@ -323,7 +356,7 @@ namespace Oxide.Plugins
                 }
                 catch (Exception ex)
                 {
-                    RaiseError("Exception in " + Name + " plugin worker thread: " + ex.ToString());
+                    RaiseError($"Exception in '{Name} v{Version}' plugin worker thread: {ex.ToString()}");
                 }
             });
         }

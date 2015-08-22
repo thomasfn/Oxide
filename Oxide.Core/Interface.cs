@@ -31,6 +31,17 @@ namespace Oxide.Core
         }
 
         /// <summary>
+        /// Calls the specified deprecated hook
+        /// </summary>
+        /// <param name="hookname"></param>
+        /// <param name="args"></param>
+        /// <returns></returns>
+        public static object CallDeprecatedHook(string hookname, params object[] args)
+        {
+            return Oxide.CallDeprecatedHook(hookname, args);
+        }
+
+        /// <summary>
         /// Calls the specified hook
         /// </summary>
         /// <param name="hookname"></param>
@@ -39,7 +50,7 @@ namespace Oxide.Core
         public static object CallHook(string hookname, params object[] args)
         {
             // Call into Oxide core
-            return Oxide.CallHook(hookname, args);
+            return Oxide?.CallHook(hookname, args);
         }
 
         /// <summary>

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Oxide.Core.ServerConsole
@@ -6,9 +7,14 @@ namespace Oxide.Core.ServerConsole
     public class ConsoleInput
     {
         public string InputString = string.Empty;
+        private readonly List<string> _inputHistory = new List<string>();
+        private int _inputHistoryIndex;
         private float _nextUpdate;
-        public event Action<string> OnInputText;
-        public string[] StatusText = {string.Empty, string.Empty, string.Empty};
+        internal event Action<string> OnInputText;
+        internal string[] StatusTextLeft = { string.Empty, string.Empty, string.Empty, string.Empty };
+        internal string[] StatusTextRight = { string.Empty, string.Empty, string.Empty, string.Empty };
+        internal ConsoleColor[] StatusTextLeftColor = { ConsoleColor.White, ConsoleColor.White, ConsoleColor.White, ConsoleColor.White };
+        internal ConsoleColor[] StatusTextRightColor = { ConsoleColor.White, ConsoleColor.White, ConsoleColor.White, ConsoleColor.White };
 
         public int LineWidth => Console.BufferWidth;
 
@@ -19,7 +25,7 @@ namespace Oxide.Core.ServerConsole
         public void ClearLine(int numLines)
         {
             Console.CursorLeft = 0;
-            Console.Write(new string(' ', LineWidth*numLines));
+            Console.Write(new string(' ', LineWidth * numLines));
             Console.CursorTop = Console.CursorTop - numLines;
             Console.CursorLeft = 0;
         }
@@ -27,14 +33,16 @@ namespace Oxide.Core.ServerConsole
         public void RedrawInputLine()
         {
             if (_nextUpdate - 0.45f > Interface.Oxide.Now) return;
-            Console.ForegroundColor = ConsoleColor.White;
             Console.CursorTop = Console.CursorTop + 1;
-            for (var i = 0; i < StatusText.Length; i++)
+            for (var i = 0; i < StatusTextLeft.Length; i++)
             {
                 Console.CursorLeft = 0;
-                Console.Write(StatusText[i].PadRight(LineWidth));
+                Console.ForegroundColor = StatusTextLeftColor[i];
+                Console.Write(StatusTextLeft[i]);
+                Console.ForegroundColor = StatusTextRightColor[i];
+                Console.Write(StatusTextRight[i].PadRight(LineWidth));
             }
-            Console.CursorTop = Console.CursorTop - (StatusText.Length + 1);
+            Console.CursorTop = Console.CursorTop - (StatusTextLeft.Length + 1);
             Console.CursorLeft = 0;
             Console.BackgroundColor = ConsoleColor.Black;
             Console.ForegroundColor = ConsoleColor.Green;
@@ -68,12 +76,15 @@ namespace Oxide.Core.ServerConsole
                 return;
             }
             var consoleKeyInfo = Console.ReadKey();
+            if (consoleKeyInfo.Key != ConsoleKey.DownArrow && consoleKeyInfo.Key != ConsoleKey.UpArrow) _inputHistoryIndex = 0;
             switch (consoleKeyInfo.Key)
             {
                 case ConsoleKey.Enter:
-                    ClearLine(StatusText.Length);
+                    ClearLine(StatusTextLeft.Length);
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine(string.Concat("> ", InputString));
+                    _inputHistory.Insert(0, InputString);
+                    if (_inputHistory.Count > 50) _inputHistory.RemoveRange(50, _inputHistory.Count - 50);
                     var str = InputString;
                     InputString = string.Empty;
                     if (OnInputText != null) OnInputText(str);
@@ -88,12 +99,37 @@ namespace Oxide.Core.ServerConsole
                     InputString = string.Empty;
                     RedrawInputLine();
                     return;
+                case ConsoleKey.UpArrow:
+                    if (_inputHistory.Count == 0) return;
+                    if (_inputHistoryIndex < 0) _inputHistoryIndex = 0;
+                    if (_inputHistoryIndex >= _inputHistory.Count - 1)
+                    {
+                        _inputHistoryIndex = _inputHistory.Count - 1;
+                        InputString = _inputHistory[_inputHistoryIndex];
+                        RedrawInputLine();
+                        return;
+                    }
+                    InputString = _inputHistory[_inputHistoryIndex++];
+                    RedrawInputLine();
+                    return;
+                case ConsoleKey.DownArrow:
+                    if (_inputHistory.Count == 0) return;
+                    if (_inputHistoryIndex >= _inputHistory.Count - 1) _inputHistoryIndex = _inputHistory.Count - 2;
+                    if (_inputHistoryIndex < 0)
+                    {
+                        InputString = string.Empty;
+                        RedrawInputLine();
+                        return;
+                    }
+                    InputString = _inputHistory[_inputHistoryIndex--];
+                    RedrawInputLine();
+                    return;
                 case ConsoleKey.Tab:
                     var results = Completion?.Invoke(InputString);
                     if (results == null || results.Length == 0) return;
                     if (results.Length > 1)
                     {
-                        ClearLine(StatusText.Length + 1);
+                        ClearLine(StatusTextLeft.Length + 1);
                         Console.ForegroundColor = ConsoleColor.Yellow;
                         var lowestDiff = results.Max(r => r.Length);
                         for (var index = 0; index < results.Length; index++)

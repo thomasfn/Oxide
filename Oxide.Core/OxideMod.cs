@@ -93,8 +93,6 @@ namespace Oxide.Core
 
         public ServerConsole.ServerConsole ServerConsole;
 
-        private Stopwatch timer;
-
         private NativeDebugCallback debugCallback;
 
         public OxideMod(NativeDebugCallback debugCallback)
@@ -124,16 +122,16 @@ namespace Oxide.Core
                 rootconfig.GetInstanceCommandLineArg(i, out varname, out format);
                 if (string.IsNullOrEmpty(varname) || commandline.HasVariable(varname))
                 {
-                    InstanceDirectory = Path.Combine(RootDirectory, string.Format(format, commandline.GetVariable(varname)));
+                    InstanceDirectory = Path.Combine(RootDirectory, CleanPath(string.Format(format, commandline.GetVariable(varname))));
                     break;
                 }
             }
             if (InstanceDirectory == null) throw new Exception("Could not identify instance directory");
-            ExtensionDirectory = Path.Combine(RootDirectory, rootconfig.ExtensionDirectory);
-            PluginDirectory = Path.Combine(InstanceDirectory, rootconfig.PluginDirectory);
-            DataDirectory = Path.Combine(InstanceDirectory, rootconfig.DataDirectory);
-            LogDirectory = Path.Combine(InstanceDirectory, rootconfig.LogDirectory);
-            ConfigDirectory = Path.Combine(InstanceDirectory, rootconfig.ConfigDirectory);
+            ExtensionDirectory = Path.Combine(RootDirectory, CleanPath(rootconfig.ExtensionDirectory));
+            PluginDirectory = Path.Combine(InstanceDirectory, CleanPath(rootconfig.PluginDirectory));
+            DataDirectory = Path.Combine(InstanceDirectory, CleanPath(rootconfig.DataDirectory));
+            LogDirectory = Path.Combine(InstanceDirectory, CleanPath(rootconfig.LogDirectory));
+            ConfigDirectory = Path.Combine(InstanceDirectory, CleanPath(rootconfig.ConfigDirectory));
             if (!Directory.Exists(ExtensionDirectory)) throw new Exception("Could not identify extension directory");
             if (!Directory.Exists(InstanceDirectory)) Directory.CreateDirectory(InstanceDirectory);
             if (!Directory.Exists(PluginDirectory)) Directory.CreateDirectory(PluginDirectory);
@@ -408,14 +406,24 @@ namespace Oxide.Core
             LogInfo("Loaded plugin {0} v{1} by {2}", plugin.Title, plugin.Version, plugin.Author);
             try
             {
+                plugin.Loader?.PluginErrors.Remove(plugin.Name);
                 RootPluginManager.AddPlugin(plugin);
+                if (plugin.Loader != null)
+                {
+                    if (plugin.Loader.PluginErrors.ContainsKey(plugin.Name))
+                    {
+                        UnloadPlugin(plugin.Name);
+                        return false;
+                    }
+                }
+                plugin.IsLoaded = true;
                 CallHook("OnPluginLoaded", plugin);
                 return true;
             }
             catch (Exception ex)
             {
                 if (plugin.Loader != null) plugin.Loader.PluginErrors[plugin.Name] = ex.Message;
-                LogException("Failed to initialize plugin " + plugin.Name, ex);
+                LogException($"Failed to initialize plugin '{plugin.Name} v{plugin.Version}'", ex);
                 return false;
             }
         }
@@ -438,7 +446,8 @@ namespace Oxide.Core
             RootPluginManager.RemovePlugin(plugin);
 
             // Let other plugins know that this plugin has been unloaded
-            CallHook("OnPluginUnloaded", plugin);
+            if (plugin.IsLoaded) CallHook("OnPluginUnloaded", plugin);
+            plugin.IsLoaded = false;
 
             LogInfo("Unloaded plugin {0} v{1} by {2}", plugin.Title, plugin.Version, plugin.Author);
             return true;
@@ -468,7 +477,7 @@ namespace Oxide.Core
         /// <param name="message"></param>
         private void plugin_OnError(Plugin sender, string message)
         {
-            LogError("{0}: {1}", sender.Name, message);
+            LogError("{0} v{1}: {2}", sender.Name, sender.Version, message);
         }
 
         #endregion
@@ -481,7 +490,7 @@ namespace Oxide.Core
         /// <returns></returns>
         public object CallHook(string hookname, params object[] args)
         {
-            // Forward the call to the plugin manager
+            if (RootPluginManager == null) return null;
             return RootPluginManager.CallHook(hookname, args);
         }
 
@@ -493,6 +502,7 @@ namespace Oxide.Core
         /// <returns></returns>
         public object CallDeprecatedHook(string hookname, params object[] args)
         {
+            if (RootPluginManager == null) return null;
             return RootPluginManager.CallDeprecatedHook(hookname, args);
         }
 
@@ -549,11 +559,15 @@ namespace Oxide.Core
 
             if (ServerConsole != null) ServerConsole.Update();
 
-            // Update plugin change watchers
-            UpdatePluginWatchers();
-
             // Update extensions
-            if (onFrame != null) onFrame(delta);
+            try
+            {
+                onFrame?.Invoke(delta);
+            }
+            catch (Exception ex)
+            {
+                LogException($"{ex.GetType().Name} while invoke OnFrame in extensions", ex);
+            }
         }
 
         public void OnShutdown()
@@ -590,16 +604,6 @@ namespace Oxide.Core
         }
 
         #region Plugin Change Watchers
-
-        /// <summary>
-        /// Updates all plugin change watchers
-        /// </summary>
-        private void UpdatePluginWatchers()
-        {
-            foreach (var watcher in extensionmanager.GetPluginChangeWatchers())
-                watcher.UpdateChangeStatus();
-        }
-
         /// <summary>
         /// Called when a plugin watcher has reported a change in a plugin source
         /// </summary>
@@ -632,6 +636,11 @@ namespace Oxide.Core
 
         #endregion
 
+        private static string CleanPath(string path)
+        {
+            return path?.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+        }
+
         private static void RegisterLibrarySearchPath(string path)
         {
             switch (Environment.OSVersion.Platform)
@@ -647,6 +656,7 @@ namespace Oxide.Core
                 case PlatformID.Unix:
                 case PlatformID.MacOSX:
                     var currentLdLibraryPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH") ?? string.Empty;
+                    path = "." + Path.PathSeparator + path;
                     var newLdLibraryPath = string.IsNullOrEmpty(currentLdLibraryPath) ? path : currentLdLibraryPath + Path.PathSeparator + path;
                     Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", newLdLibraryPath);
                     break;

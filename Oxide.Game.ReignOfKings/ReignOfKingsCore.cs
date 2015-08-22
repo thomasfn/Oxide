@@ -75,15 +75,24 @@ namespace Oxide.Game.ReignOfKings
         {
             // Add our commands
             cmdlib.AddChatCommand("oxide.plugins", this, "cmdPlugins");
+            cmdlib.AddChatCommand("plugins", this, "cmdPlugins");
             cmdlib.AddChatCommand("oxide.load", this, "cmdLoad");
+            cmdlib.AddChatCommand("load", this, "cmdLoad");
             cmdlib.AddChatCommand("oxide.unload", this, "cmdUnload");
+            cmdlib.AddChatCommand("unload", this, "cmdUnload");
             cmdlib.AddChatCommand("oxide.reload", this, "cmdReload");
+            cmdlib.AddChatCommand("reload", this, "cmdReload");
             cmdlib.AddChatCommand("oxide.version", this, "cmdVersion");
+            cmdlib.AddChatCommand("version", this, "cmdVersion");
 
             cmdlib.AddChatCommand("oxide.group", this, "cmdGroup");
+            cmdlib.AddChatCommand("group", this, "cmdGroup");
             cmdlib.AddChatCommand("oxide.usergroup", this, "cmdUserGroup");
+            cmdlib.AddChatCommand("usergroup", this, "cmdUserGroup");
             cmdlib.AddChatCommand("oxide.grant", this, "cmdGrant");
+            cmdlib.AddChatCommand("grant", this, "cmdGrant");
             cmdlib.AddChatCommand("oxide.revoke", this, "cmdRevoke");
+            cmdlib.AddChatCommand("revoke", this, "cmdRevoke");
 
             // Configure remote logging
             RemoteLogger.SetTag("game", "reign of kings");
@@ -174,50 +183,6 @@ namespace Oxide.Game.ReignOfKings
         }
 
         /// <summary>
-        /// Logs to the Oxide console
-        /// </summary>
-        /// <param name="logType"></param>
-        /// <param name="type"></param>
-        /// <param name="message"></param>
-        /// <param name="context"></param>
-        [HookMethod("OnLog")]
-        private void OnLog(Logger.LogType logType, Type type, object message, object[] formatObjects, object context)
-        {
-            if (Interface.Oxide.ServerConsole == null) return;
-            var settings = Logger.GetSettings(type);
-            var color = ConsoleColor.Gray;
-            switch (logType)
-            {
-                case Logger.LogType.Exception:
-                case Logger.LogType.Assert:
-                case Logger.LogType.Error:
-                    if (!settings.ShowError) return;
-                    color = ConsoleColor.Red;
-                    break;
-                case Logger.LogType.Warning:
-                    if (!settings.ShowWarning) return;
-                    color = ConsoleColor.Yellow;
-                    break;
-                case Logger.LogType.Info:
-                    if (!settings.ShowInfo) return;
-                    break;
-                case Logger.LogType.Debug:
-                    if (!settings.ShowDebug) return;
-                    break;
-            }
-            object obj = message as string;
-            if (obj == null && message is Exception)
-                obj = ((Exception)message).Message;
-            string str;
-            if (formatObjects != null)
-                str = string.Format((string)message, formatObjects);
-            else
-                str = (string)obj;
-            if (string.IsNullOrEmpty(str) || ReignOfKingsExtension.Filter.Any(str.Contains)) return;
-            Interface.Oxide.ServerConsole.AddMessage(str, color);
-        }
-
-        /// <summary>
         /// Called when the "oxide.plugins" command has been executed
         /// </summary>
         /// <param name="player"></param>
@@ -286,10 +251,7 @@ namespace Oxide.Game.ReignOfKings
 
             foreach (var name in args)
             {
-                if (string.IsNullOrEmpty(name)) continue;
-                // Load
-                Interface.Oxide.LoadPlugin(name);
-                pluginmanager.GetPlugin(name);
+                if (string.IsNullOrEmpty(name) || !Interface.Oxide.LoadPlugin(name)) continue;
                 if (!loadingPlugins.ContainsKey(name)) loadingPlugins.Add(name, player);
             }
         }
@@ -326,6 +288,11 @@ namespace Oxide.Game.ReignOfKings
 
                 // Unload
                 var plugin = pluginmanager.GetPlugin(name);
+                if (plugin == null)
+                {
+                    SendPlayerMessage(player, "Plugin '{0}' not loaded.", name);
+                    continue;
+                }
                 Interface.Oxide.UnloadPlugin(name);
                 SendPlayerMessage(player, "Unloaded plugin {0} v{1} by {2}", plugin.Title, plugin.Version, plugin.Author);
             }
@@ -340,6 +307,8 @@ namespace Oxide.Game.ReignOfKings
         [HookMethod("cmdReload")]
         private void cmdReload(Player player, string command, string[] args)
         {
+            if (!PermissionsLoaded(player)) return;
+
             if (!HasPermission(player, "admin")) return;
 
             // Check arg 1 exists
@@ -361,6 +330,11 @@ namespace Oxide.Game.ReignOfKings
 
                 // Reload
                 var plugin = pluginmanager.GetPlugin(name);
+                if (plugin == null)
+                {
+                    SendPlayerMessage(player, "Plugin '{0}' not loaded.", name);
+                    continue;
+                }
                 Interface.Oxide.ReloadPlugin(name);
                 SendPlayerMessage(player, "Reloaded plugin {0} v{1} by {2}", plugin.Title, plugin.Version, plugin.Author);
             }
@@ -642,7 +616,7 @@ namespace Oxide.Game.ReignOfKings
         /// <returns></returns>
         private bool HasPermission(Player player, string perm)
         {
-            if (RoKPerms.HasPermission(player.Name, perm) || permission.UserHasGroup(player.Id.ToString(), perm) || player.IsServer) return true;
+            if (serverInitialized && RoKPerms.HasPermission(player.Name, perm) || permission.UserHasGroup(player.Id.ToString(), perm) || player.IsServer) return true;
             SendPlayerMessage(player, "You don't have permission to use this command.");
             return false;
         }
@@ -663,6 +637,32 @@ namespace Oxide.Game.ReignOfKings
                         return type;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Called when a player connects to the server
+        /// </summary>
+        /// <param name="player"></param>
+        /// <returns></returns>
+        [HookMethod("IOnPlayerConnected")]
+        private object IOnPlayerConnected(Player player)
+        {
+            if (player.Id == 9999999999) return null;
+
+            return Interface.CallHook("OnPlayerConnected", player);
+        }
+
+        /// <summary>
+        /// Called when a chat message was sent
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        [HookMethod("IOnPlayerChat")]
+        private object IOnPlayerChat(PlayerEvent e)
+        {
+            if (e.SenderId == 9999999999) return null;
+
+            return Interface.CallHook("OnPlayerChat", e);
         }
 
         /// <summary>
@@ -797,6 +797,18 @@ namespace Oxide.Game.ReignOfKings
                 Array.Resize(ref folders, 2);
                 FoldersField.SetValue(fileCounter, folders);
             }
+        }
+
+        [HookMethod("OnPlayerDisconnected")]
+        private void OnPlayerDisconnected(Player player)
+        {
+            Libraries.Covalence.ReignOfKingsCovalenceProvider.Instance.PlayerManager.NotifyPlayerDisconnect(player);
+        }
+
+        [HookMethod("OnPlayerConnected")]
+        private void OnPlayerConnected(Player player)
+        {
+            Libraries.Covalence.ReignOfKingsCovalenceProvider.Instance.PlayerManager.NotifyPlayerConnect(player);
         }
     }
 }

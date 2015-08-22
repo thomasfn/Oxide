@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -70,6 +71,11 @@ namespace Oxide.Ext.Lua
         public LuaExtension(ExtensionManager manager)
             : base(manager)
         {
+            if (Environment.OSVersion.Platform == PlatformID.Unix)
+            {
+                var extDir = Interface.Oxide.ExtensionDirectory;
+                File.WriteAllText(Path.Combine(extDir, "KeraLua.dll.config"), $"<configuration>\n<dllmap dll=\"lua52\" target=\"{extDir}/x86/liblua52.so\" os=\"linux\" cpu=\"x86\" />\n<dllmap dll=\"lua52\" target=\"{extDir}/x64/liblua52.so\" os=\"linux\" cpu=\"x86-64\" />\n</configuration>");
+            }
             ExceptionHandler.RegisterType(typeof(LuaScriptException), ex =>
             {
                 var luaex = (LuaScriptException) ex;
@@ -143,7 +149,7 @@ end
 @"function tmp:__index( key )
     if (type( key ) == 'table') then
         local baseType = rawget( self, '_type' )
-        return util.SpecialiseType( baseType, key )
+        return util.SpecializeType( baseType, key )
     end
 end
 ", "LuaExtension").Call();
@@ -196,7 +202,7 @@ end
         {
             if (_typesInit) return;
             _typesInit = true;
-            var filter = new Regex(@"\$|\<|\>", RegexOptions.Compiled);
+            var filter = new Regex(@"\$|\<|\>|\#=", RegexOptions.Compiled);
             // Bind all namespaces and types
             foreach (var type in AppDomain.CurrentDomain.GetAssemblies()
                 .Where(AllowAssemblyAccess)
@@ -438,7 +444,7 @@ end
             if (string.IsNullOrEmpty(nspace)) return true;
             if (nspace == "System")
             {
-                if (type.IsValueType || type.Name == "String") return true;
+                if (type.IsValueType || type.Name == "String" || type.Name == "Convert") return true;
             }
             foreach (string whitelist in WhitelistNamespaces)
                 if (nspace.StartsWith(whitelist)) return true;

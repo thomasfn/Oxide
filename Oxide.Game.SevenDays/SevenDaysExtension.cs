@@ -29,10 +29,11 @@ namespace Oxide.Game.SevenDays
         public override string Author => "Oxide Team";
 
         public override string[] WhitelistAssemblies => new[] { "Assembly-CSharp", "mscorlib", "Oxide.Core", "System", "System.Core", "UnityEngine" };
-        public override string[] WhitelistNamespaces => new[] { "Steamworks", "System.Collections", "UnityEngine" };
+        public override string[] WhitelistNamespaces => new[] { "Steamworks", "System.Collections", "System.Security.Cryptography", "System.Text", "UnityEngine" };
 
         private static readonly string[] Filter =
         {
+            "* SKY INITIALIZED",
             "Awake done",
             "Biomes image size",
             "Command line arguments:",
@@ -43,9 +44,10 @@ namespace Oxide.Game.SevenDays
             "HDR Render",
             "HDR and MultisampleAntiAliasing",
             "INF Cleanup",
+            "INF Disconnect",
             "INF GMA.",
             "INF GOM.",
-            "INF Disconnect",
+            "INF OnApplicationQuit",
             "INF WSD.",
             "Load key config",
             "Loading permissions file at",
@@ -60,14 +62,15 @@ namespace Oxide.Game.SevenDays
             "Setting breakpad minidump AppID",
             "StartAsServer",
             "StartGame",
-            "INF OnApplicationQuit",
             "Started thread",
+            "Weather Packages Created",
             "World.Cleanup",
             "World.Load:",
             "World.Unload",
             "WorldStaticData.Init()",
+            "[EAC] Log:",
             "[NET] ServerShutdown",
-            "[Steamworks.NET] NET: Server",
+            "[Steamworks.NET]",
             "createWorld() done",
             "createWorld:"
         };
@@ -87,13 +90,11 @@ namespace Oxide.Game.SevenDays
         /// </summary>
         public override void Load()
         {
-            IsGameExtension = true;
-
             // Register our loader
             Manager.RegisterPluginLoader(new SevenDaysPluginLoader());
 
             // Register our libraries
-            Manager.RegisterLibrary("SevenDays", new Libraries.SevenDays());
+            Manager.RegisterLibrary("SDTD", new Libraries.SevenDays());
         }
 
         /// <summary>
@@ -111,12 +112,62 @@ namespace Oxide.Game.SevenDays
         public override void OnModLoad()
         {
             if (!Interface.Oxide.EnableConsole()) return;
+
             Application.logMessageReceived += HandleLog;
             Interface.Oxide.ServerConsole.Input += ServerConsoleOnInput;
-            Interface.Oxide.ServerConsole.Status1Left = () => string.Concat(GamePrefs.GetString(EnumGamePrefs.ServerName));
-            //Interface.Oxide.ServerConsole.Status1Right = () => string.Concat("Players: ", Server.PlayerCount, "/", Server.PlayerLimit, " Frame Rate: ", Mathf.RoundToInt(1f / Time.smoothDeltaTime), " FPS");
-            Interface.Oxide.ServerConsole.Status2Left = () => string.Concat("Version: ", cl000c.cCompatibilityVersion, ", Oxide: ", OxideMod.Version.ToString());
-            //Interface.Oxide.ServerConsole.Status1Right = () => ();
+
+            Interface.Oxide.ServerConsole.Title = () =>
+            {
+                var players = GameManager.Instance?.World?.Players?.Count;
+                var hostname = GamePrefs.GetString(EnumGamePrefs.ServerName);
+                return string.Concat(players, " | ", hostname);
+            };
+
+            Interface.Oxide.ServerConsole.Status1Left = () =>
+            {
+                var hostname = GamePrefs.GetString(EnumGamePrefs.ServerName);
+                return string.Concat(" ", hostname);
+            };
+            Interface.Oxide.ServerConsole.Status1Right = () =>
+            {
+                var fps = Mathf.RoundToInt(1f / Time.smoothDeltaTime);
+                var seconds = TimeSpan.FromSeconds(Time.realtimeSinceStartup);
+                var uptime = $"{seconds.TotalHours:00}h{seconds.Minutes:00}m{seconds.Seconds:00}s".TrimStart(' ', 'd', 'h', 'm', 's', '0');
+                return string.Concat(fps, "fps, ", uptime);
+            };
+
+            Interface.Oxide.ServerConsole.Status2Left = () =>
+            {
+                var players = GameManager.Instance?.World?.Players?.Count;
+                var playerLimit = GamePrefs.GetInt(EnumGamePrefs.ServerMaxPlayerCount);
+                //var sleepersCount = ;
+                //var sleepers = sleepersCount + (sleepersCount.Equals(1) ? " sleeper" : " sleepers");
+                var entitiesCount = GameManager.Instance?.World?.Entities?.Count;
+                var entities = entitiesCount + (entitiesCount.Equals(1) ? " entity" : " entities");
+                return string.Concat(" ", players, "/", playerLimit, " players, ", entities);
+            };
+            Interface.Oxide.ServerConsole.Status2Right = () =>
+            {
+                // TODO: Network in/out
+                return "";
+            };
+
+            Interface.Oxide.ServerConsole.Status3Left = () =>
+            {
+                if (GameManager.Instance == null || GameManager.Instance.World == null) return string.Empty;
+                TimeSpan t = TimeSpan.FromSeconds(GameManager.Instance.World.GetWorldTime());
+                DateTime time = DateTime.Today.Add(t);
+                var gameTime = time.ToString("h:mm tt").ToLower();
+                return string.Concat(" ", gameTime);
+            };
+            Interface.Oxide.ServerConsole.Status3Right = () =>
+            {
+                var gameVersion = GamePrefs.GetString(EnumGamePrefs.GameVersion);
+                var oxideVersion = OxideMod.Version.ToString();
+                return string.Concat("Oxide ", oxideVersion, " for ", gameVersion);
+            };
+            Interface.Oxide.ServerConsole.Status3RightColor = ConsoleColor.Yellow;
+
             Interface.Oxide.ServerConsole.Completion = input =>
             {
                 if (string.IsNullOrEmpty(input)) return null;

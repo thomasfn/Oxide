@@ -3,8 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Oxide.Core.Configuration
 {
@@ -20,7 +22,7 @@ namespace Oxide.Core.Configuration
         /// <summary>
         /// Initializes a new instance of the DynamicConfigFile class
         /// </summary>
-        public DynamicConfigFile()
+        public DynamicConfigFile(string filename) : base(filename)
         {
             _keyvalues = new Dictionary<string, object>();
             var converter = new KeyValuesConverter();
@@ -33,32 +35,108 @@ namespace Oxide.Core.Configuration
         /// Loads this config from the specified file
         /// </summary>
         /// <param name="filename"></param>
-        public override void Load(string filename)
+        public override void Load(string filename = null)
         {
-            CheckPath(filename);
+            filename = CheckPath(filename ?? Filename);
             string source = File.ReadAllText(filename);
             _keyvalues = JsonConvert.DeserializeObject<Dictionary<string, object>>(source, _settings);
+        }
+
+        /// <summary>
+        /// Loads this config from the specified file
+        /// </summary>
+        /// <param name="filename"></param>
+        public T ReadObject<T>(string filename = null)
+        {
+            filename = CheckPath(filename ?? Filename);
+            T customObject;
+            if (Exists())
+            {
+                var source = File.ReadAllText(filename);
+                customObject = JsonConvert.DeserializeObject<T>(source, _settings);
+            }
+            else
+            {
+                customObject = Activator.CreateInstance<T>();
+                WriteObject(customObject);
+            }
+            return customObject;
         }
 
         /// <summary>
         /// Saves this config to the specified file
         /// </summary>
         /// <param name="filename"></param>
-        public override void Save(string filename)
+        public override void Save(string filename = null)
         {
-            CheckPath(filename);
+            filename = CheckPath(filename ?? Filename);
+            var dir = GetDirectoryName(filename);
+            if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
             File.WriteAllText(filename, JsonConvert.SerializeObject(_keyvalues, Formatting.Indented, _settings));
+        }
+
+        /// <summary>
+        /// Saves this config to the specified file
+        /// </summary>
+        /// <param name="sync"></param>
+        /// <param name="filename"></param>
+        /// <param name="config"></param>
+        public void WriteObject<T>(T config, bool sync = false, string filename = null)
+        {
+            filename = CheckPath(filename ?? Filename);
+            var json = JsonConvert.SerializeObject(config, Formatting.Indented, _settings);
+            File.WriteAllText(filename, json);
+            if (sync) _keyvalues = JsonConvert.DeserializeObject<Dictionary<string, object>>(json, _settings);
+        }
+
+        public bool Exists(string filename = null)
+        {
+            filename = CheckPath(filename ?? Filename);
+            return File.Exists(filename);
         }
 
         /// <summary>
         /// Check if file path is in chroot directory
         /// </summary>
         /// <param name="filename"></param>
-        private void CheckPath(string filename)
+        private string CheckPath(string filename)
         {
-            string path = Path.GetFullPath(filename);
+            filename = SanitiseName(filename);
+            var path = Path.GetFullPath(filename);
             if (!path.StartsWith(_chroot, StringComparison.Ordinal))
                 throw new Exception("Only access to oxide directory!");
+            return filename;
+        }
+
+        /// <summary>
+        /// Makes the specified name safe for use in a filename
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public static string SanitiseName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return string.Empty;
+            name = name.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+            name = Regex.Replace(name, "[" + Regex.Escape(new string(Path.GetInvalidPathChars())) + "]", "_");
+            name = Regex.Replace(name, @"\.+", ".");
+            return name.TrimStart('.', Path.DirectorySeparatorChar);
+        }
+
+        /// <summary>
+        /// Gets the path only
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public static string GetDirectoryName(string name)
+        {
+            try
+            {
+                return name.Substring(0, name.LastIndexOf(Path.DirectorySeparatorChar));
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
@@ -263,12 +341,16 @@ namespace Oxide.Core.Configuration
             {
                 // Get the dictionary to populate
                 Dictionary<string, object> dict = existingValue as Dictionary<string, object> ?? new Dictionary<string, object>();
-
+                if (reader.TokenType != JsonToken.StartObject)
+                {
+                    JArray.Load(reader);
+                    return dict;
+                }
                 // Read until end of object
                 while (reader.Read() && reader.TokenType != JsonToken.EndObject)
                 {
                     // Read property name
-                    if (reader.TokenType != JsonToken.PropertyName) Throw("Unexpected token");
+                    if (reader.TokenType != JsonToken.PropertyName) Throw("Unexpected token: " + reader.TokenType);
                     string propname = reader.Value as string;
                     if (!reader.Read()) Throw("Unexpected end of json");
 
@@ -284,7 +366,12 @@ namespace Oxide.Core.Configuration
                             dict[propname] = reader.Value;
                             break;
                         case JsonToken.Integer:
-                            dict[propname] = Convert.ToInt32(reader.Value);
+                            var value = reader.Value.ToString();
+                            int result;
+                            if (int.TryParse(value, out result))
+                                dict[propname] = result;
+                            else
+                                dict[propname] = value;
                             break;
                         case JsonToken.StartObject:
                             dict[propname] = serializer.Deserialize<Dictionary<string, object>>(reader);
@@ -293,7 +380,7 @@ namespace Oxide.Core.Configuration
                             dict[propname] = serializer.Deserialize<List<object>>(reader);
                             break;
                         default:
-                            Throw("Unexpected token");
+                            Throw("Unexpected token: " + reader.TokenType);
                             break;
                     }
                 }
@@ -321,7 +408,12 @@ namespace Oxide.Core.Configuration
                             list.Add(reader.Value);
                             break;
                         case JsonToken.Integer:
-                            list.Add(Convert.ToInt32(reader.Value));
+                            var value = reader.Value.ToString();
+                            int result;
+                            if (int.TryParse(value, out result))
+                                list.Add(result);
+                            else
+                                list.Add(value);
                             break;
                         case JsonToken.StartObject:
                             list.Add(serializer.Deserialize<Dictionary<string, object>>(reader));
@@ -330,7 +422,7 @@ namespace Oxide.Core.Configuration
                             list.Add(serializer.Deserialize<List<object>>(reader));
                             break;
                         default:
-                            Throw("Unexpected token");
+                            Throw("Unexpected token: " + reader.TokenType);
                             break;
                     }
                 }
@@ -360,7 +452,7 @@ namespace Oxide.Core.Configuration
                 // Simply loop through and serialise
                 foreach (var pair in dict.OrderBy(i => i.Key))
                 {
-                    writer.WritePropertyName(pair.Key);
+                    writer.WritePropertyName(pair.Key, true);
                     serializer.Serialize(writer, pair.Value);
                 }
 

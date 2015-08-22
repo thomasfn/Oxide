@@ -19,13 +19,13 @@ namespace Oxide.Plugins
         {
             base.SetPluginInfo(name, path);
 
-            cmd = Interface.GetMod().GetLibrary<Command>("Command");
-            permission = Interface.GetMod().GetLibrary<Permission>("Permission");
+            cmd = Interface.Oxide.GetLibrary<Command>("Command");
+            permission = Interface.Oxide.GetLibrary<Permission>("Permission");
         }
 
         public override void HandleAddedToManager(PluginManager manager)
         {
-            foreach (FieldInfo field in GetType().GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (var field in GetType().GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             {
                 var attributes = field.GetCustomAttributes(typeof(OnlinePlayersAttribute), true);
                 if (attributes.Length > 0)
@@ -51,11 +51,16 @@ namespace Oxide.Plugins
                         Puts("[{0}] The {1} class does not have a public Player field! (online players will not be tracked)", Name, plugin_field.GenericArguments[1].Name);
                         continue;
                     }
+                    if (!plugin_field.HasValidConstructor(typeof(BasePlayer)))
+                    {
+                        Puts("[{0}] The {1} field is using a class which contains no valid constructor (online players will not be tracked)", Name, field.Name);
+                        continue;
+                    }
                     onlinePlayerFields.Add(plugin_field);
                 }
             }
 
-            foreach (MethodInfo method in GetType().GetMethods(BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (var method in GetType().GetMethods(BindingFlags.NonPublic | BindingFlags.Instance))
             {
                 var attributes = method.GetCustomAttributes(typeof(ConsoleCommandAttribute), true);
                 if (attributes.Length > 0)
@@ -122,7 +127,8 @@ namespace Oxide.Plugins
         /// <param name="args"></param>
         protected void PrintToConsole(BasePlayer player, string format, params object[] args)
         {
-            player.SendConsoleCommand("echo " + string.Format(format, args));
+            if (player?.net != null)
+                player.SendConsoleCommand("echo " + (args.Length > 0 ? string.Format(format, args) : format));
         }
 
         /// <summary>
@@ -133,7 +139,7 @@ namespace Oxide.Plugins
         protected void PrintToConsole(string format, params object[] args)
         {
             if (BasePlayer.activePlayerList.Count < 1) return;
-            ConsoleSystem.Broadcast("echo " + string.Format(format, args));
+            ConsoleSystem.Broadcast("echo " + (args.Length > 0 ? string.Format(format, args) : format));
         }
 
         /// <summary>
@@ -144,7 +150,8 @@ namespace Oxide.Plugins
         /// <param name="args"></param>
         protected void PrintToChat(BasePlayer player, string format, params object[] args)
         {
-            player.SendConsoleCommand("chat.add", 0, string.Format(format, args), 1f);
+            if (player?.net != null)
+                player.SendConsoleCommand("chat.add", 0, args.Length > 0 ? string.Format(format, args) : format, 1f);
         }
 
         /// <summary>
@@ -155,7 +162,7 @@ namespace Oxide.Plugins
         protected void PrintToChat(string format, params object[] args)
         {
             if (BasePlayer.activePlayerList.Count < 1) return;
-            ConsoleSystem.Broadcast("chat.add", 0, string.Format(format, args), 1f);
+            ConsoleSystem.Broadcast("chat.add", 0, args.Length > 0 ? string.Format(format, args) : format, 1f);
         }
 
         /// <summary>
@@ -166,10 +173,10 @@ namespace Oxide.Plugins
         /// <param name="args"></param>
         protected void SendReply(ConsoleSystem.Arg arg, string format, params object[] args)
         {
-            var message = string.Format(format, args);
+            var message = args.Length > 0 ? string.Format(format, args) : format;
 
             var player = arg.connection?.player as BasePlayer;
-            if (player != null)
+            if (player?.net != null)
             {
                 player.SendConsoleCommand("echo " + message);
                 return;
@@ -197,10 +204,10 @@ namespace Oxide.Plugins
         /// <param name="args"></param>
         protected void SendWarning(ConsoleSystem.Arg arg, string format, params object[] args)
         {
-            var message = string.Format(format, args);
+            var message = args.Length > 0 ? string.Format(format, args) : format;
 
             var player = arg.connection?.player as BasePlayer;
-            if (player != null)
+            if (player?.net != null)
             {
                 player.SendConsoleCommand("echo " + message);
                 return;
@@ -217,10 +224,10 @@ namespace Oxide.Plugins
         /// <param name="args"></param>
         protected void SendError(ConsoleSystem.Arg arg, string format, params object[] args)
         {
-            var message = string.Format(format, args);
+            var message = args.Length > 0 ? string.Format(format, args) : format;
 
             var player = arg.connection?.player as BasePlayer;
-            if (player != null)
+            if (player?.net != null)
             {
                 player.SendConsoleCommand("echo " + message);
                 return;

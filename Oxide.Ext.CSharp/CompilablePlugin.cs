@@ -7,18 +7,21 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Oxide.Core;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
     public class CompilablePlugin
     {
         public CSharpExtension Extension;
+        public CSharpPluginLoader Loader;
         public string Name;
         public string Directory;
         public string ScriptName;
         public string ScriptPath;
         public string[] ScriptLines;
         public Encoding ScriptEncoding;
+        public HashSet<string> Requires = new HashSet<string>();
         public HashSet<string> References = new HashSet<string>();
         public HashSet<string> IncludePaths = new HashSet<string>();
         public string CompilerErrors;
@@ -26,30 +29,27 @@ namespace Oxide.Plugins
         public CompiledAssembly LastGoodAssembly;
         public DateTime LastModifiedAt;
         public DateTime LastCompiledAt;
+        public bool IsCompilationNeeded;
         public bool IsReloading;
 
         private Action<CSharpPlugin> loadCallback;
         private Action<bool> compileCallback;
         private float compilationQueuedAt;
 
-        public CompilablePlugin(CSharpExtension extension, string directory, string name)
+        public byte[] ScriptSource => ScriptEncoding.GetBytes(string.Join(Environment.NewLine, ScriptLines));
+
+        public CompilablePlugin(CSharpExtension extension, CSharpPluginLoader loader, string directory, string name)
         {
             Extension = extension;
+            Loader = loader;
             Directory = directory;
             ScriptName = name;
             Name = Regex.Replace(Regex.Replace(ScriptName, @"(?:^|_)([a-z])", m => m.Groups[1].Value.ToUpper()), "_", "");
-            ScriptPath = string.Format("{0}\\{1}.cs", Directory, ScriptName);
+            ScriptPath = Path.Combine(Directory, string.Format("{0}.cs", ScriptName));
             CheckLastModificationTime();
         }
 
-        public bool HasBeenModified()
-        {
-            var last_modified_at = LastModifiedAt;
-            CheckLastModificationTime();
-            return LastModifiedAt != last_modified_at;
-        }
-
-        public void Compile(Action<bool> callback)
+        public void Compile(Action<bool> callback, bool queue_compilation = true)
         {
             if (compilationQueuedAt > 0f)
             {
@@ -58,9 +58,9 @@ namespace Oxide.Plugins
                 RemoteLogger.Debug($"Plugin compilation is already queued: {ScriptName} ({ago:0.000} ago)");
                 return;
             }
-            if (CompiledAssembly != null && !HasBeenModified())
+            if (queue_compilation && CompiledAssembly != null && !HasBeenModified())
             {
-                if (!CompiledAssembly.IsBatch || CompiledAssembly.CompilablePlugins.All(pl => pl.IsReloading))
+                if (CompiledAssembly.IsLoading || !CompiledAssembly.IsBatch || CompiledAssembly.CompilablePlugins.All(pl => pl.IsReloading))
                 {
                     //Interface.Oxide.LogDebug("Plugin is already compiled: {0}", Name);
                     callback(true);
@@ -69,13 +69,13 @@ namespace Oxide.Plugins
             }
             compileCallback = callback;
             compilationQueuedAt = Interface.Oxide.Now;
-            Extension.CompilationRequested(this);
+            if (queue_compilation) Extension.CompilationRequested(this);
         }
 
         public void LoadPlugin(Action<CSharpPlugin> callback = null)
         {
             if (CompiledAssembly == null)
-            { 
+            {
                 Interface.Oxide.LogError("Load called before a compiled assembly exists: " + Name);
                 RemoteLogger.Error("Load called before a compiled assembly exists: " + Name);
                 IsReloading = false;
@@ -137,6 +137,7 @@ namespace Oxide.Plugins
 
                 plugin.SetPluginInfo(ScriptName, ScriptPath);
                 plugin.Watcher = Extension.Watcher;
+                plugin.Loader = Loader;
 
                 if (!Interface.Oxide.PluginLoaded(plugin))
                 {
@@ -157,6 +158,7 @@ namespace Oxide.Plugins
 
         public void OnCompilationSucceeded(CompiledAssembly compiled_assembly)
         {
+            IsCompilationNeeded = false;
             compilationQueuedAt = 0f;
             CompiledAssembly = compiled_assembly;
             compileCallback(true);
@@ -164,6 +166,7 @@ namespace Oxide.Plugins
 
         public void OnCompilationFailed()
         {
+            IsCompilationNeeded = false;
             compilationQueuedAt = 0f;
             LastCompiledAt = default(DateTime);
             compileCallback(false);
@@ -185,20 +188,40 @@ namespace Oxide.Plugins
         private void InitFailed(string message = null)
         {
             if (message != null) Interface.Oxide.LogError(message);
-            OnPluginFailed();
             if (loadCallback != null) loadCallback(null);
+            OnPluginFailed();
+        }
+
+        public bool IsCompiledAssemblyOutdated()
+        {
+            var last_modified_at = GetLastModificationTime();
+            return last_modified_at != default(DateTime) && last_modified_at != LastCompiledAt;
+        }
+
+        public bool HasBeenModified()
+        {
+            var last_modified_at = LastModifiedAt;
+            CheckLastModificationTime();
+            return LastModifiedAt != last_modified_at;
         }
 
         private void CheckLastModificationTime()
         {
             if (!File.Exists(ScriptPath)) return;
+            var modified_time = GetLastModificationTime();
+            if (modified_time != default(DateTime)) LastModifiedAt = modified_time;
+        }
+
+        private DateTime GetLastModificationTime()
+        {
             try
             {
-                LastModifiedAt = File.GetLastWriteTime(ScriptPath);
+                return File.GetLastWriteTime(ScriptPath);
             }
             catch (IOException ex)
             {
                 Interface.Oxide.LogError("IOException while checking plugin: {0} ({1})", ScriptName, ex.Message);
+                return default(DateTime);
             }
         }
     }

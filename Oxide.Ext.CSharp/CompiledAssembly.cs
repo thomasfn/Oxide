@@ -20,8 +20,10 @@ namespace Oxide.Plugins
     {
         public CompilablePlugin[] CompilablePlugins;
         public string[] PluginNames;
+        public string Name;
         public byte[] RawAssembly;
         public Assembly LoadedAssembly;
+        public bool IsLoading;
         public bool IsBatch => CompilablePlugins.Length > 1;
 
         private List<Action<bool>> loadCallbacks = new List<Action<bool>>();
@@ -35,11 +37,13 @@ namespace Oxide.Plugins
         };
 
         private string[] whitelistedNamespaces => new[] {
-            "System.IO.MemoryStream", "System.IO.BinaryReader", "System.IO.BinaryWriter", "System.Net.Sockets.SocketFlags"
+            "System.IO.MemoryStream", "System.IO.BinaryReader", "System.IO.BinaryWriter", "System.Net.Sockets.SocketFlags",
+            "System.Security.Cryptography"
         };
 
-        public CompiledAssembly(CompilablePlugin[] plugins, byte[] raw_assembly)
+        public CompiledAssembly(string name, CompilablePlugin[] plugins, byte[] raw_assembly)
         {
+            Name = name;
             CompilablePlugins = plugins;
             RawAssembly = raw_assembly;
             PluginNames = CompilablePlugins.Select(pl => pl.Name).ToArray();
@@ -53,6 +57,7 @@ namespace Oxide.Plugins
                 return;
             }
 
+            IsLoading = true;
             loadCallbacks.Add(callback);
             if (isPatching) return;
 
@@ -64,7 +69,9 @@ namespace Oxide.Plugins
                 //Interface.Oxide.LogInfo("Patching {0} took {1}ms", Name, Math.Round((Interface.Oxide.Now - started_at) * 1000f));
                 if (raw_assembly == null)
                 {
-                    callback(false);
+                    foreach (var cb in loadCallbacks) cb(true);
+                    loadCallbacks.Clear();
+                    IsLoading = false;
                     return;
                 }
 
@@ -73,6 +80,8 @@ namespace Oxide.Plugins
 
                 foreach (var cb in loadCallbacks) cb(true);
                 loadCallbacks.Clear();
+                
+                IsLoading = false;
             });
         }
 
@@ -161,12 +170,8 @@ namespace Oxide.Plugins
                                     {
                                         var method_call = instruction.Operand as MethodReference;
                                         var full_namespace = method_call.DeclaringType.FullName;
-
-                                        if (full_namespace == "System.Type" && method_call.Name == "GetType")
-                                            if (instruction.Previous.OpCode == OpCodes.Ldstr)
-                                                full_namespace = instruction.Previous.Operand as string;
-
-                                        if (IsNamespaceBlacklisted(full_namespace))
+                                        
+                                        if ((full_namespace == "System.Type" && method_call.Name == "GetType") || IsNamespaceBlacklisted(full_namespace))
                                         {
                                             for (var n = 0; n < method.Parameters.Count; n++)
                                                 instructions.Insert(i++, Instruction.Create(OpCodes.Pop));
