@@ -313,7 +313,7 @@ namespace Oxide.Game.Rust
             // Show the versions
             if (!string.IsNullOrEmpty(protocol) && !string.IsNullOrEmpty(oxide))
             {
-                arg.ReplyWith("Oxide Version: " + oxide + ", Rust Protocol: " + protocol);
+                arg.ReplyWith("Oxide version: " + oxide + ", Rust Protocol: " + protocol);
             }
         }
 
@@ -1051,6 +1051,28 @@ namespace Oxide.Game.Rust
         {
             var ent = info.HitEntity as BuildingBlock;
             return ent != null ? null : Interface.CallHook("OnHammerHit", hammer.ownerPlayer, info);
+        }
+
+        /// <summary>
+        /// Called when a player opened a door
+        /// </summary>
+        /// <param name="door"></param>
+        /// <param name="msg"></param>
+        [HookMethod("IOnDoorOpened")]
+        private object IOnDoorOpened(Door door, BaseEntity.RPCMessage msg)
+        {
+            return Interface.CallHook("OnDoorOpened", door, msg.player);
+        }
+
+        /// <summary>
+        /// Called when a player closed a door
+        /// </summary>
+        /// <param name="door"></param>
+        /// <param name="msg"></param>
+        [HookMethod("IOnDoorClosed")]
+        private object IOnDoorClosed(Door door, BaseEntity.RPCMessage msg)
+        {
+            return Interface.CallHook("OnDoorClosed", door, msg.player);
         }
 
         /// <summary>

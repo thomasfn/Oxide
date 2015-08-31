@@ -358,7 +358,7 @@ namespace Oxide.Game.ReignOfKings
             // Show the versions
             if (!string.IsNullOrEmpty(protocol) && !string.IsNullOrEmpty(oxide))
             {
-                SendPlayerMessage(player, "Oxide Version: " + oxide + ", Reign of Kings version: " + protocol);
+                SendPlayerMessage(player, "Oxide version: " + oxide + ", Reign of Kings version: " + protocol);
             }
         }
 
@@ -687,6 +687,8 @@ namespace Oxide.Game.ReignOfKings
             string[] args;
             ParseChatCommand(message, out cmd, out args);
             if (cmd == null) return null;
+            
+            Interface.CallHook("OnPlayerCommand", e.Player, cmd, args);
 
             // handle it
             if (!cmdlib.HandleChatCommand(e.Player, cmd, args)) return null;
